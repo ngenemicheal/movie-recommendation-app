@@ -14,54 +14,95 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // Function: Update or insert search count
+// function updateSearchCount($conn, $searchTerm, $movie)
+// {
+//     $stmt = mysqli_prepare($conn, "SELECT id, count FROM trending_movies WHERE search_term = ? LIMIT 1");
+//     mysqli_stmt_bind_param($stmt, "s", $searchTerm);
+//     mysqli_stmt_execute($stmt);
+//     $result = mysqli_stmt_get_result($stmt);
+//     $existing = mysqli_fetch_assoc($result);
+//     mysqli_stmt_close($stmt);
+
+//     if ($existing) {
+//         $newCount = $existing['count'] + 1;
+//         $stmt = mysqli_prepare($conn, "UPDATE trending_movies SET count = ? WHERE id = ?");
+//         mysqli_stmt_bind_param($stmt, "ii", $newCount, $existing['id']);
+//         mysqli_stmt_execute($stmt);
+//         mysqli_stmt_close($stmt);
+//     } else {
+//         $posterUrl = !empty($movie['poster_path'])
+//             ? "https://image.tmdb.org/t/p/w500{$movie['poster_path']}"
+//             : "no-movie.png";
+
+
+//         $stmt = mysqli_prepare(
+//             $conn,
+//             "INSERT INTO trending_movies (search_term, count, movie_id, poster_url) VALUES (?, 1, ?, ?)"
+//         );
+//         mysqli_stmt_bind_param($stmt, "sis", $searchTerm, $movie['id'], $posterUrl);
+//         mysqli_stmt_execute($stmt);
+//         mysqli_stmt_close($stmt);
+//     }
+// }
+
+// // Function: Get top trending movies
+// function getTrendingMovies($conn, $limit = 5)
+// {
+//     $sql = "SELECT * FROM trending_movies ORDER BY count DESC LIMIT ?";
+//     $stmt = mysqli_prepare($conn, $sql);
+//     mysqli_stmt_bind_param($stmt, "i", $limit);
+//     mysqli_stmt_execute($stmt);
+//     $result = mysqli_stmt_get_result($stmt);
+
+//     $movies = [];
+//     while ($row = mysqli_fetch_assoc($result)) {
+//         $movies[] = $row;
+//     }
+//     mysqli_stmt_close($stmt);
+
+//     return $movies;
+// }
+
+
+// PostgreSQL implemation
 function updateSearchCount($conn, $searchTerm, $movie)
 {
-    $stmt = mysqli_prepare($conn, "SELECT id, count FROM trending_movies WHERE search_term = ? LIMIT 1");
-    mysqli_stmt_bind_param($stmt, "s", $searchTerm);
-    mysqli_stmt_execute($stmt);
-    $result = mysqli_stmt_get_result($stmt);
-    $existing = mysqli_fetch_assoc($result);
-    mysqli_stmt_close($stmt);
+    // Check if search term already exists
+    $query = "SELECT id, count FROM trending_movies WHERE search_term = $1 LIMIT 1";
+    $result = pg_query_params($conn, $query, [$searchTerm]);
+    $existing = pg_fetch_assoc($result);
 
     if ($existing) {
+        // Update count
         $newCount = $existing['count'] + 1;
-        $stmt = mysqli_prepare($conn, "UPDATE trending_movies SET count = ? WHERE id = ?");
-        mysqli_stmt_bind_param($stmt, "ii", $newCount, $existing['id']);
-        mysqli_stmt_execute($stmt);
-        mysqli_stmt_close($stmt);
+        $updateQuery = "UPDATE trending_movies SET count = $1 WHERE id = $2";
+        pg_query_params($conn, $updateQuery, [$newCount, $existing['id']]);
     } else {
+        // Prepare poster URL
         $posterUrl = !empty($movie['poster_path'])
             ? "https://image.tmdb.org/t/p/w500{$movie['poster_path']}"
             : "no-movie.png";
 
-
-        $stmt = mysqli_prepare(
-            $conn,
-            "INSERT INTO trending_movies (search_term, count, movie_id, poster_url) VALUES (?, 1, ?, ?)"
-        );
-        mysqli_stmt_bind_param($stmt, "sis", $searchTerm, $movie['id'], $posterUrl);
-        mysqli_stmt_execute($stmt);
-        mysqli_stmt_close($stmt);
+        // Insert new record
+        $insertQuery = "INSERT INTO trending_movies (search_term, count, movie_id, poster_url)
+                        VALUES ($1, 1, $2, $3)";
+        pg_query_params($conn, $insertQuery, [$searchTerm, $movie['id'], $posterUrl]);
     }
 }
 
-// Function: Get top trending movies
 function getTrendingMovies($conn, $limit = 5)
 {
-    $sql = "SELECT * FROM trending_movies ORDER BY count DESC LIMIT ?";
-    $stmt = mysqli_prepare($conn, $sql);
-    mysqli_stmt_bind_param($stmt, "i", $limit);
-    mysqli_stmt_execute($stmt);
-    $result = mysqli_stmt_get_result($stmt);
+    $query = "SELECT * FROM trending_movies ORDER BY count DESC LIMIT $1";
+    $result = pg_query_params($conn, $query, [$limit]);
 
     $movies = [];
-    while ($row = mysqli_fetch_assoc($result)) {
+    while ($row = pg_fetch_assoc($result)) {
         $movies[] = $row;
     }
-    mysqli_stmt_close($stmt);
 
     return $movies;
 }
+
 
 // Handle request
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
@@ -85,4 +126,4 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     echo json_encode(["error" => "Method not allowed"]);
 }
 
-mysqli_close($conn);
+// mysqli_close($conn);
